@@ -113,3 +113,41 @@ lib/
 - [x] 会话导出 Markdown（/export）
 - [x] 会话统计（/stats /tokens /session）
 - [x] 消息带时间戳
+
+## v5 新增模块
+
+### 成本追踪 (cost.js)
+- 记录每次 API 调用的 token 用量
+- 计算 USD 成本（基于模型定价）
+- 会话统计和历史日志
+
+### 模型 Fallback (fallback.js)
+- 主模型失败自动切换备用模型
+- 支持自定义 Fallback 链
+- 错误检测和模型切换逻辑
+
+### 项目上下文 (context-project.js)
+- 自动查找项目根目录
+- 加载 AGENTS.md、.cursorrules 等规则文件
+- 注入项目特定系统提示
+
+### Diff 可视化 (diff.js)
+- 行级 diff 算法
+- 彩色 diff 显示
+- 编辑前预览确认
+
+### 交互式编辑 (interactive.js)
+- 文件内容查看（带行号）
+- 搜索并替换
+- 行范围编辑
+- 交互式菜单
+
+### MCP 集成 (mcp.js)
+- MCP 客户端管理
+- 自动发现 MCP 工具
+- 工具调用代理
+
+### 子代理系统 (subagent.js)
+- 子代理创建和调度
+- 并发控制
+- 状态管理和结果获取

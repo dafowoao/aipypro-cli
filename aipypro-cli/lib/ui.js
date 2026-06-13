@@ -308,6 +308,18 @@ function historyPos(current, total) {
   return ` ${C.subtle}${current}/${total}${C.reset}`;
 }
 
+function renderDiffLine(line) {
+  if (line.startsWith('+')) return `${C.green}${line}${C.reset}`;
+  else if (line.startsWith('-')) return `${C.red}${line}${C.reset}`;
+  else if (line.startsWith('@@')) return `${C.cyan}${line}${C.reset}`;
+  return `${C.dim}${line}${C.reset}`;
+}
+
+function showDiff(diffStr) {
+  const lines = diffStr.split('\n');
+  for (const line of lines) console.log(`  ${renderDiffLine(line)}`);
+}
+
 module.exports={
   C,S,banner,line,gap,
   userLabel,aiLabel,setThread,resetMsgCounter,nextMsgNum,toolSection,sectionTitle,
@@ -317,4 +329,5 @@ module.exports={
   ok,er,tip,warn,info,status,contextBar,elapsed,
   bottomBar, inputPrompt, historyPos,
   renderMarkdownLine, renderInline, LANG_COLORS,
+  renderDiffLine, showDiff,
 };

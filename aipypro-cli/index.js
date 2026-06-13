@@ -8,11 +8,15 @@ const { estimateTokens, trimHistory } = require('./lib/context');
 const { callAI, tools } = require('./lib/agent');
 const ui = require('./lib/ui');
 const history = require('./lib/history');
+const { getSessionStats } = require('./lib/cost');
+const { getModel, getModelChain, resetToPrimary } = require('./lib/fallback');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 let iconv = null;
 try { iconv = require('iconv-lite'); } catch {}
+let mcpManager;
+try { mcpManager = require('./lib/mcp').mcpManager; } catch { mcpManager = null; }
 
 if (process.platform === 'win32') {
   try { execSync('chcp 65001', { stdio: 'pipe' }); } catch {}
@@ -51,7 +55,8 @@ function isMultiLineEnd(s) {
 const COMMANDS = [
   '/help', '/tools', '/history', '/stats', '/clear', '/exit',
   '/undo', '/resume', '/save', '/load', '/export', '/tokens',
-  '/model', '/session', '/config',
+  '/model', '/session', '/config', '/fallback', '/project', '/edit',
+  '/mcp', '/agents',
 ];
 
 function tabComplete(partial) {
@@ -278,10 +283,12 @@ async function processLine(s, rl, chatHistory, turnCounters) {
   const elapsed = Math.floor((Date.now() - sessionMeta.startTime) / 1000);
   // A. 上下文进度条
   ui.contextBar(totalTokens, 64000);
+  const stats = getSessionStats();
   ui.status([
     {l:'消息',v:`${chatHistory.length}`,c:ui.C.muted},
     {l:'提问',v:`${turnCounters.user}`,c:ui.C.muted},
     {l:'Tokens',v:`${totalTokens}`,c:ui.C.muted},
+    {l:'费用',v:`$${stats.cost.toFixed(4)}`,c:ui.C.green},
     {l:'时长',v:`${elapsed}s`,c:ui.C.subtle},
   ]);
   rl.prompt();
@@ -409,6 +416,100 @@ function handleCommand(s, rl, chatHistory) {
     cmdListSessions();
     rl.prompt(); return true;
   }
+  if (first === '/fallback') {
+    const current = getModel();
+    const chain = getModelChain();
+    console.log(`\n  ${ui.C.accent}${ui.C.bold}Fallback 模型链${ui.C.reset}`);
+    for (let i = 0; i < chain.length; i++) {
+      const marker = chain[i] === current ? `${ui.C.green} ◀ 当前${ui.C.reset}` : '';
+      console.log(`  ${ui.C.dim}${i + 1}. ${chain[i]}${marker}${ui.C.reset}`);
+    }
+    console.log(`\n  ${ui.C.muted}当前活跃模型: ${ui.C.accent}${current}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}主模型: ${CFG.model}${ui.C.reset}\n`);
+    rl.prompt(); return true;
+  }
+  if (first === '/project') {
+    const { getProjectInfo, findProjectRoot } = require('./lib/context-project');
+    const root = findProjectRoot();
+    const info = getProjectInfo(root);
+    console.log(`\n  ${ui.C.accent}${ui.C.bold}项目信息${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}名称:   ${info.name}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}类型:   ${info.type}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}根目录: ${info.root}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}AGENTS.md: ${info.hasAgentsMd ? '✓' : '✗'}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}.aipypro.json: ${info.hasProjectConfig ? '✓' : '✗'}${ui.C.reset}`);
+    if (info.version) console.log(`  ${ui.C.muted}版本:   ${info.version}${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}忽略:   ${info.ignorePatterns.join(', ')}${ui.C.reset}\n`);
+    rl.prompt(); return true;
+  }
+  if (first === '/edit' && s.length > 6) {
+    const editPath = s.slice(6).trim().replace(/^["']|["']$/g, '');
+    if (!editPath) { ui.info('用法: /edit <文件路径>'); rl.prompt(); return true; }
+    const fp = require('path').resolve(editPath);
+    if (!fs.existsSync(fp)) { ui.er(`文件不存在: ${editPath}`); rl.prompt(); return true; }
+    const { interactiveEdit } = require('./lib/interactive');
+    const content = fs.readFileSync(fp, 'utf8');
+    interactiveEdit(fp, content).then(result => {
+      if (result.changes.length > 0) {
+        fs.writeFileSync(fp, result.content, 'utf8');
+        ui.ok(`已应用 ${result.changes.length} 项更改到 ${editPath}`);
+      } else {
+        ui.info('未做任何更改');
+      }
+      rl.prompt();
+    }).catch(e => { ui.er(e.message); rl.prompt(); });
+    return true;
+  }
+  if (first === '/agents') {
+    const { subAgentManager } = require('./lib/subagent');
+    const agents = subAgentManager.listAgents();
+    const stats = subAgentManager.getStats();
+    console.log(`\n  ${ui.C.accent}${ui.C.bold}子代理状态${ui.C.reset}`);
+    console.log(`  ${ui.C.muted}总数: ${stats.total}  运行: ${stats.running}  完成: ${stats.completed}  失败: ${stats.failed}${ui.C.reset}`);
+    if (agents.length > 0) {
+      console.log(`\n  ${ui.C.accent}ID${ui.C.reset}  ${ui.C.accent}状态${ui.C.reset}  ${ui.C.accent}任务${ui.C.reset}`);
+      for (const a of agents) {
+        const s = a.toJSON();
+        const statusIcon = s.status === 'completed' ? `${ui.C.green}✓${ui.C.reset}` :
+                          s.status === 'running' ? `${ui.C.amber}●${ui.C.reset}` :
+                          s.status === 'failed' ? `${ui.C.red}✗${ui.C.reset}` :
+                          `${ui.C.dim}-${ui.C.reset}`;
+        console.log(`  ${statusIcon} ${ui.C.dim}${s.id}${ui.C.reset}  ${s.task.substring(0, 50)}${s.task.length > 50 ? '...' : ''}`);
+      }
+    }
+    console.log('');
+    rl.prompt(); return true;
+  }
+  if (first === '/mcp') {
+    if (!mcpManager) {
+      ui.warn('MCP SDK 未安装，运行 npm install @modelcontextprotocol/sdk');
+    } else if (!mcpManager.sdkAvailable) {
+      ui.warn('MCP SDK 不可用（加载失败）');
+    } else {
+      const parts = s.split(/\s+/);
+      const sub = parts[1] || 'list';
+      if (sub === 'list') {
+        const servers = mcpManager.listServers();
+        const tools = mcpManager.getTools();
+        console.log(`\n  ${ui.C.accent}${ui.C.bold}MCP 服务器${ui.C.reset}`);
+        if (servers.length === 0) {
+          console.log(`  ${ui.C.muted}无已连接服务器${ui.C.reset}`);
+        } else {
+          for (const srv of servers)
+            console.log(`  ${ui.C.green}◆${ui.C.reset} ${srv}`);
+        }
+        console.log(`\n  ${ui.C.accent}${ui.C.bold}MCP 工具 (${tools.length}个)${ui.C.reset}`);
+        for (const t of tools)
+          console.log(`  ${ui.C.green}◆${ui.C.reset} ${t.name}  ${ui.C.dim}${t.desc}${ui.C.reset}`);
+        console.log('');
+      } else if (sub === 'disconnect') {
+        mcpManager.disconnectAll().then(() => ui.ok('已断开所有 MCP 服务器'));
+      } else {
+        ui.info('用法: /mcp [list|disconnect]');
+      }
+    }
+    rl.prompt(); return true;
+  }
 
   return false; // 不是命令
 }
@@ -513,7 +614,9 @@ function showHelp() {
     /model    切换模型      /save      保存会话
     /load     加载会话      /export    导出会话
     /list     列出保存      /resume    恢复历史
-    undo      撤回          clear      清屏
+    /fallback Fallback链     /project   项目信息
+    /edit     交互式编辑    /mcp       MCP 服务器
+    /agents   子代理状态    undo       撤回          clear      清屏
     exit      退出
 
   ${ui.C.muted}━━ 多行输入 ━━${ui.C.reset}
