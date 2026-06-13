@@ -93,8 +93,12 @@ async function cmdAsk(q) {
 async function cmdChat() {
   ui.banner(CFG.model, tools.tools.length);
   const turnCounters = { total: 0, user: 0 };
-  ui.info(`/${CFG.model}  ·  /help 查看命令  ·  输入 """ 进入多行模式`);
   ui.setThread(true);
+  ui.resetMsgCounter();
+  // F. 欢迎消息
+  const helpHint = `输入 ${ui.C.amber}"""${ui.C.reset} 多行 · ${ui.C.accent}↑↓${ui.C.reset} 历史 · ${ui.C.accent}Tab${ui.C.reset} 补全 · ${ui.C.green}/help${ui.C.reset} 更多`;
+  ui.info(`/${CFG.model}  ·  ${helpHint}`);
+
 
   const chatHistory = [];
   let busy = false;
@@ -123,9 +127,10 @@ async function cmdChat() {
       if (histIdx === -1) histIdx = cmdHistory.length - 1;
       else if (histIdx > 0) histIdx--;
       currentLine = cmdHistory[histIdx] || '';
-      // 重写当前行
+      // G. 显示历史位置
+      const posTag = ` ${ui.C.subtle}${histIdx+1}/${cmdHistory.length}${ui.C.reset}`;
       rl._deleteLine();
-      rl._writeToOutput(currentLine);
+      rl._writeToOutput(currentLine + posTag);
       return;
     }
     // ↓ 历史下翻
@@ -236,10 +241,15 @@ async function processLine(s, rl, chatHistory, turnCounters) {
 
   turnCounters.total++;
   turnCounters.user++;
+  const msgNum = ui.nextMsgNum();
   const msgs = [...chatHistory, { role: 'user', content: s }];
   try {
-    ui.aiLabel();
+    const startTime = Date.now();
+    ui.aiLabel(msgNum);
     const reply = await callAI(msgs);
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+    // D. 显示响应耗时
+    ui.elapsed(elapsedSec);
 
     chatHistory.length = 0;
     chatHistory.push(...msgs.filter(m => m.role !== 'system'));
@@ -266,6 +276,8 @@ async function processLine(s, rl, chatHistory, turnCounters) {
     return m.content || '';
   }).join(' '));
   const elapsed = Math.floor((Date.now() - sessionMeta.startTime) / 1000);
+  // A. 上下文进度条
+  ui.contextBar(totalTokens, 64000);
   ui.status([
     {l:'消息',v:`${chatHistory.length}`,c:ui.C.muted},
     {l:'提问',v:`${turnCounters.user}`,c:ui.C.muted},

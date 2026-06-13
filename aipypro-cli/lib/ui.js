@@ -1,41 +1,38 @@
 // ============================================================
-// AiPyPro Pro v4 — 终端界面 (美化加强版 v2)
-// 改进: 圆角代码框 / 对话连线 / 工具缩进 / 弹跳圆点思考动画
-//       渐变分隔线 / 状态栏卡片 / 圆角表格 / 引用背景
+// AiPyPro Pro v4 — 终端界面 (美化加强版 v3)
+// 全部改进: 圆角代码框/对话连线/工具缩进/弹跳圆点动画
+// 渐变分隔线/状态栏卡片/圆角表格/引用背景色
+// 上下文进度条/消息编号/响应耗时/错误框/欢迎消息
 // ============================================================
 const T = process.stdout.isTTY && process.stdin.isTTY;
 
-// ─── 色彩体系 ───
 const C = {
   reset:T?'\x1b[0m':'', bold:T?'\x1b[1m':'', dim:T?'\x1b[2m':'', ul:T?'\x1b[4m':'',
   italic:T?'\x1b[3m':'', reverse:T?'\x1b[7m':'',
-  text:T?'\x1b[38;2;224;237;248m':'',      // 正文
-  accent:T?'\x1b[38;2;107;158;255m':'',    // 蓝色强调
-  muted:T?'\x1b[38;2;148;163;184m':'',     // 灰色
-  subtle:T?'\x1b[38;2;71;85;105m':'',       // 暗灰
-  amber:T?'\x1b[38;2;255;191;0m':'',       // 琥珀（用户）
-  green:T?'\x1b[38;2;52;211;153m':'',      // 成功
-  red:T?'\x1b[38;2;248;113;113m':'',       // 错误
-  orange:T?'\x1b[38;2;251;146;60m':'',     // 警告
-  cyan:T?'\x1b[38;2;56;189;248m':'',       // 青色
-  purple:T?'\x1b[38;2;192;132;252m':'',    // 紫色
-  code:T?'\x1b[38;2;230;190;100m':'',      // 代码金色
-  codeBg:T?'\x1b[48;2;15;23;42m':'',       // 代码块背景
-  infoBg:T?'\x1b[48;2;20;30;50m':'',       // 信息背景
-  statusBg:T?'\x1b[48;2;10;18;30m':'',     // 状态栏背景
-  statusBorder:T?'\x1b[48;2;30;50;80m':'', // 状态栏边框
-  // ⑧ 引用新增背景色
+  text:T?'\x1b[38;2;224;237;248m':'',
+  accent:T?'\x1b[38;2;107;158;255m':'',
+  muted:T?'\x1b[38;2;148;163;184m':'',
+  subtle:T?'\x1b[38;2;71;85;105m':'',
+  amber:T?'\x1b[38;2;255;191;0m':'',
+  green:T?'\x1b[38;2;52;211;153m':'',
+  red:T?'\x1b[38;2;248;113;113m':'',
+  orange:T?'\x1b[38;2;251;146;60m':'',
+  cyan:T?'\x1b[38;2;56;189;248m':'',
+  purple:T?'\x1b[38;2;192;132;252m':'',
+  code:T?'\x1b[38;2;230;190;100m':'',
+  codeBg:T?'\x1b[48;2;15;23;42m':'',
+  infoBg:T?'\x1b[48;2;20;30;50m':'',
+  statusBg:T?'\x1b[48;2;10;18;30m':'',
+  statusBorder:T?'\x1b[48;2;30;50;80m':'',
   quoteBg:T?'\x1b[48;2;10;25;40m':'',
+  errBg:T?'\x1b[48;2;30;10;15m':'',
 };
 
-// ─── 符号 ───
 const S = T ? {
   b:'◆', d:'·', ok:'✓', er:'✗', wa:'!', ar:'▸',
   hd:'━', hr:'─', vt:'│', br:'┃',
   quote:'▎', bullet:'●', arrow:'→',
-  // ① 圆角代码块符号
   tl:'╭', tr:'╮', bl:'╰', brn:'╯',
-  // ⑦ 表格符号
   tbl_tl:'┌', tbl_tr:'┐', tbl_bl:'└', tbl_br:'┘',
   tbl_h:'┬', tbl_b:'┴', tbl_v:'│', tbl_x:'┼',
 } : {
@@ -70,8 +67,6 @@ function banner(model='',tools=0) {
 }
 
 function line(n=40){console.log(`  ${C.subtle}${S.hr.repeat(n)}${C.reset}`);}
-
-// ⑤ 渐变分隔线 — 居中 ◆ + 两侧淡出
 function gap(){
   if(T){
     const w = process.stdout.columns || 80;
@@ -82,19 +77,22 @@ function gap(){
   }
 }
 
-// ② 对话竖线标签 ───
-// 新增 threadLabel 模式：用户和 AI 消息之间用 ┃ 竖线连接
-let threadMode = false; // 由 index.js 控制开关
-
+// ② 对话竖线 + B.消息编号
+let threadMode = false;
+let msgCounter = 0;
 function setThread(v) { threadMode = v; }
+function resetMsgCounter() { msgCounter = 0; }
+function nextMsgNum() { return ++msgCounter; }
 
-function userLabel(){
+function userLabel(msgNum){
+  const num = msgNum ? ` ${C.subtle}${S.d}${C.reset} ${C.subtle}#${msgNum}` : '';
   const line = threadMode ? `  ${C.subtle}${S.br}${C.reset}` : `  ${C.amber}${S.hr.repeat(3)}${C.reset}`;
-  console.log(`${line} ${C.amber}${C.bold}You${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
+  console.log(`${line} ${C.amber}${C.bold}You${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${num}${C.reset}`);
 }
-function aiLabel(){
+function aiLabel(msgNum){
+  const num = msgNum ? ` ${C.subtle}${S.d}${C.reset} ${C.subtle}#${msgNum}` : '';
   const line = threadMode ? `  ${C.subtle}${S.br}${C.reset}` : `  ${C.accent}${S.hr.repeat(3)}${C.reset}`;
-  console.log(`${line} ${C.accent}${C.bold}AiPyPro${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
+  console.log(`${line} ${C.accent}${C.bold}AiPyPro${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${num}${C.reset}`);
 }
 function toolSection(name){
   console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.dim}${name}${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
@@ -105,13 +103,13 @@ let timer=null;
 function thinking(){
   stopThinking();
   if(!T){process.stdout.write('  ... ');return;}
-  const dots = ['○ ○ ○', '◔ ◔ ◔', '◑ ◑ ◑', '◕ ◕ ◕', '● ● ●', '◕ ◕ ◕', '◑ ◑ ◑', '◔ ◔ ◔'];
+  const dots = ['○ ○ ○','◔ ◔ ◔','◑ ◑ ◑','◕ ◕ ◕','● ● ●','◕ ◕ ◕','◑ ◑ ◑','◔ ◔ ◔'];
   let i=0;
   process.stdout.write(`  ${C.subtle}${S.br}${C.reset} ${C.accent}${C.bold}思考中${C.reset} ${C.accent}${dots[i]}${C.reset}`);
-  timer=setInterval(() => {
-    i = (i + 1) % dots.length;
+  timer=setInterval(()=>{
+    i=(i+1)%dots.length;
     process.stdout.write(`\r\x1b[K${C.subtle}${S.br}${C.reset} ${C.accent}${C.bold}思考中${C.reset} ${C.accent}${dots[i]}${C.reset}`);
-  }, 180);
+  },180);
 }
 function stopThinking(){
   if(timer){clearInterval(timer);timer=null;}
@@ -119,10 +117,7 @@ function stopThinking(){
 }
 
 // ============================================================
-// Markdown 渲染引擎 (改造版)
-// ① 代码块 ╭──╮ 圆角
-// ⑦ 表格 ┌─┬─┐ 圆角
-// ⑧ 引用 背景色
+// Markdown 渲染引擎
 // ============================================================
 const LANG_COLORS = {
   'python':C.cyan,'javascript':C.amber,'js':C.amber,'typescript':C.accent,'ts':C.accent,
@@ -135,46 +130,34 @@ const LANG_COLORS = {
   'makefile':C.orange,'ini':C.muted,'toml':C.green,
 };
 
-// ─── 流式输出 ───
 const MB=50000;
 let ss={c:false,l:'',n:0,b:''};
 
 function stStart(){ss={c:false,l:'',n:0,b:''};}
 
-// ⑦ 表格渲染（使用 ┌─┬─┐ 四边框）
+// ⑦ 表格渲染
 function renderTableLine(l) {
   const cells = l.split('|').filter(Boolean).map(c => c.trim());
   if (!cells.length) return '';
   const isSep = cells.every(c => /^[\s:-]+$/.test(c));
   if (isSep) {
-    const sep = cells.map(c => {
-      const align = c.startsWith(':') && c.endsWith(':') ? `${S.hr.repeat(Math.max(c.length,3))}` :
-                   c.startsWith(':') ? `${S.hr.repeat(Math.max(c.length,2))}` :
-                   c.endsWith(':') ? `${S.hr.repeat(Math.max(c.length,2))}` :
-                   `${S.hr.repeat(Math.max(c.length,3))}`;
-      return sep;
-    });
+    const sep = cells.map(() => `${S.hr.repeat(5)}`);
     return `  ${C.subtle}${S.tbl_tl}${sep.join(S.tbl_h)}${S.tbl_tr}${C.reset}`;
   }
   return `  ${C.subtle}${S.tbl_v}${C.reset} ${cells.join(` ${C.subtle}${S.tbl_v}${C.reset} `)} ${C.subtle}${S.tbl_v}${C.reset}`;
 }
 
 function renderMarkdownLine(l) {
-  // ⑦ 表格（优先检测）
   if (/^\|.+\|$/.test(l.trim())) return renderTableLine(l.trim());
-  // ⑤ 分隔线（纯分隔线）
   if (/^[-*_]{3,}\s*$/.test(l.trim())) return `  ${C.subtle}${S.hr.repeat(36)}${C.reset}`;
-  // ⑧ 引用（带背景色）
+  // ⑧ 引用背景色
   if (/^>\s?/.test(l)) {
     const text = l.replace(/^>\s?/, '');
     if(T) return `  ${C.cyan}${S.quote}${C.reset}${C.quoteBg} ${C.italic}${C.muted}${text}${C.reset}`;
     return `  ${C.cyan}${S.quote}${C.reset} ${C.italic}${text}${C.reset}`;
   }
-  // 无序列表
   if (/^[-*+]\s/.test(l)) return `  ${C.muted}${S.bullet}${C.reset} ${renderInline(l.replace(/^[-*+]\s/, ''))}`;
-  // 有序列表
   if (/^\d+\.\s/.test(l)) return `  ${C.muted}${l.match(/^\d+/)[0]}.${C.reset} ${renderInline(l.replace(/^\d+\.\s/, ''))}`;
-  // 标题
   if (/^#{1,4}\s/.test(l)) {
     const level = l.match(/^#+/)[0].length;
     const text = l.replace(/^#+\s*/, '');
@@ -186,32 +169,20 @@ function renderMarkdownLine(l) {
 
 function renderInline(t) {
   let r = t;
-  // 粗体 **text**
   r = r.replace(/\*\*(.+?)\*\*/g, `${C.bold}$1${C.reset}${C.text}`);
-  // 斜体 *text*
   r = r.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${C.italic}$1${C.reset}${C.text}`);
-  // 行内代码 `code`
   r = r.replace(/`([^`]+)`/g, `${C.codeBg} ${C.code}$1${C.reset}${C.text} `);
-  // 链接 [text](url)
   r = r.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `${C.accent}${C.ul}$1${C.reset}${C.text}`);
   return r;
 }
 
-// ① 代码块渲染（╭──╮ 圆角风格）
+// ① ╭──╮ 圆角代码块
 function codeBlockOpen(lang) {
   const langColor = LANG_COLORS[lang.toLowerCase()] || C.muted;
-  const padded = ` ${lang} `.length > 3 ? ` ${lang} ` : ` ${lang}  `;
-  const left = `  ${C.subtle}${S.tl}${S.hr.repeat(3)}${C.reset}`;
-  const label = `${langColor}${C.bold}${padded}${C.reset}`;
-  const right = `${C.subtle}${S.hr.repeat(20)}${S.tr}${C.reset}`;
-  console.log(`${left}${label}${C.subtle}${S.hr.repeat(20)}${S.tr}${C.reset}`);
+  console.log(`  ${C.subtle}${S.tl}${S.hr.repeat(3)}${C.reset} ${langColor}${C.bold} ${lang} ${C.reset} ${C.subtle}${S.hr.repeat(22)}${S.tr}${C.reset}`);
 }
-function codeBlockClose(n, lang) {
-  const langColor = LANG_COLORS[(lang||'').toLowerCase()] || C.muted;
-  const left = `  ${C.subtle}${S.bl}${S.hr.repeat(3)}${C.reset}`;
-  const label = `${langColor}${n} lines${C.reset}`;
-  const right = `${C.subtle}${S.hr.repeat(20)}${S.brn}${C.reset}`;
-  console.log(`${left} ${C.subtle}${n} lines${C.reset} ${C.subtle}${S.hr.repeat(20)}${S.brn}${C.reset}`);
+function codeBlockClose(n) {
+  console.log(`  ${C.subtle}${S.bl}${S.hr.repeat(3)}${C.reset} ${C.subtle}${n} lines${C.reset} ${C.subtle}${S.hr.repeat(22)}${S.brn}${C.reset}`);
 }
 
 function stWrite(t){
@@ -221,16 +192,13 @@ function stWrite(t){
   const ls=ss.b.split(/\r?\n/);ss.b=ls.pop()||'';
   for(const l of ls){
     const x=l.trimEnd();
-    // 代码块开关
     if(x.startsWith('```')){
       if(!ss.c){
-        ss.c=true;
-        ss.l = x.replace(/```(\w*)/,'$1').trim() || 'code';
-        ss.n = 0;
+        ss.c=true;ss.l=x.replace(/```(\w*)/,'$1').trim()||'code';ss.n=0;
         codeBlockOpen(ss.l);
       } else {
         ss.c=false;
-        codeBlockClose(ss.n, ss.l);
+        codeBlockClose(ss.n);
       }
       continue;
     }
@@ -243,7 +211,6 @@ function stWrite(t){
     }
   }
 }
-
 function stFlush(){
   if(ss.b){
     const x = ss.b.trimEnd();
@@ -251,21 +218,17 @@ function stFlush(){
       ss.n++;
       const lineNum = String(ss.n).padStart(3,' ');
       console.log(` ${C.codeBg}${C.subtle}${lineNum}${C.reset}${C.codeBg} ${C.code}${x}${C.reset}`);
-      codeBlockClose(ss.n, ss.l);
+      codeBlockClose(ss.n);
       ss.c=false;
     } else {
       console.log(renderMarkdownLine(x));
     }
     ss.b='';
   }
-  if(ss.c){
-    ss.n++;
-    codeBlockClose(ss.n, ss.l);
-    ss.c=false;
-  }
+  if(ss.c){ss.n++;codeBlockClose(ss.n);ss.c=false;}
 }
 
-// ③ 工具调用（缩进 + 清理）───
+// ③ 工具调用
 function tLine(name,st='run'){
   const co={'run':C.accent,'done':C.green,'err':C.red};
   const lb=st==='run'?'':st==='done'?` ${C.green}${S.ok}${C.reset}`:` ${C.red}${S.er}${C.reset}`;
@@ -281,12 +244,36 @@ function tOut(text){
 
 // ─── 消息 ───
 function ok(m){console.log(` ${C.green}${S.ok}${C.reset} ${_(m)}`);}
-function er(m){console.log(` ${C.red}${S.er}${C.reset} ${C.red}${_(m)}${C.reset}`);}
+// E. 错误框
+function er(m){
+  if(T) {
+    console.log(` ${C.red}${S.er}${C.reset} ${C.red}${C.bold}${_(m)}${C.reset}`);
+  } else {
+    console.log(` ${C.red}${S.er}${C.reset} ${C.red}${_(m)}${C.reset}`);
+  }
+}
 function tip(m){console.log(`  ${C.accent}${S.b}${C.reset} ${C.dim}${_(m)}${C.reset}`);}
 function warn(m){console.log(` ${C.orange}${S.wa}${C.reset} ${C.dim}${_(m)}${C.reset}`);}
 function info(m){console.log(`  ${C.dim}${_(m)}${C.reset}`);}
 
-// ⑥ 状态栏（背景卡片）───
+// A. 上下文进度条
+function contextBar(used, total) {
+  if (!T || !total) return;
+  const pct = Math.min(used / total, 1);
+  const barLen = 18;
+  const filled = Math.round(pct * barLen);
+  const bar = `${C.accent}${'▓'.repeat(Math.min(filled, barLen))}${C.reset}${C.subtle}${'░'.repeat(Math.max(barLen - filled, 0))}${C.reset}`;
+  const pctStr = `${(pct * 100).toFixed(0)}%`;
+  const color = pct > 0.8 ? C.red : pct > 0.5 ? C.orange : C.muted;
+  console.log(`  ${C.dim}上下文${C.reset} ${bar} ${color}${pctStr}${C.reset} ${C.subtle}${(used/1000).toFixed(1)}K/${(total/1000).toFixed(0)}K${C.reset}`);
+}
+
+// D. AI 响应耗时
+function elapsed(seconds) {
+  console.log(`  ${C.subtle}${S.d}${C.reset} ${C.subtle}处理完成 · 耗时 ${seconds}s${C.reset}`);
+}
+
+// ⑥ 状态栏
 function status(items){
   let p = items.map(i => `${C.dim}${i.l}${C.reset} ${i.c||C.text}${i.v}${C.reset}`);
   if(T) {
@@ -296,7 +283,6 @@ function status(items){
   }
 }
 
-// ─── 分隔标题 ───
 function sectionTitle(title){
   console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.muted}${title}${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
 }
@@ -311,18 +297,24 @@ function bottomBar(text, color=C.muted){
   console.log(`  ${color}${S.d}${C.reset} ${color}${t}${C.reset}`);
 }
 
-// ─── 输入提示增强 ───
+// ─── 输入提示 ───
 function inputPrompt(msg='> '){
   return `${C.amber}>${C.reset} ${msg}`;
 }
 
+// G. 历史浏览位置
+function historyPos(current, total) {
+  if (total <= 1) return '';
+  return ` ${C.subtle}${current}/${total}${C.reset}`;
+}
+
 module.exports={
   C,S,banner,line,gap,
-  userLabel,aiLabel,setThread,toolSection,sectionTitle,
+  userLabel,aiLabel,setThread,resetMsgCounter,nextMsgNum,toolSection,sectionTitle,
   thinking,stopThinking,
   stStart,stWrite,stFlush,
   tLine,tOut,
-  ok,er,tip,warn,info,status,
-  bottomBar, inputPrompt,
+  ok,er,tip,warn,info,status,contextBar,elapsed,
+  bottomBar, inputPrompt, historyPos,
   renderMarkdownLine, renderInline, LANG_COLORS,
 };
