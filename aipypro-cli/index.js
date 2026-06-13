@@ -51,18 +51,19 @@ function isMultiLineEnd(s) {
   return s.trim() === MULTILINE_DELIM;
 }
 
-// ─── ═══ Tab 补全 ─── ───
+// ─── Tab 补全 ───
 const COMMANDS = [
   '/help', '/tools', '/history', '/stats', '/clear', '/exit',
   '/undo', '/resume', '/save', '/load', '/export', '/tokens',
-  '/model', '/session', '/config', '/fallback', '/project', '/edit',
-  '/mcp', '/agents',
+  '/model', '/session', '/config',
 ];
+const tabState = { matches: [], idx: -1, prefix: '', originalLine: '' };
 
 function tabComplete(partial) {
   if (!partial) return COMMANDS;
   return COMMANDS.filter(c => c.startsWith(partial));
 }
+
 
 // ─── ═══ 主循环 ─── ─── ───
 
@@ -151,23 +152,55 @@ async function cmdChat() {
       rl._writeToOutput(currentLine);
       return;
     }
-    // Tab 补全
+    // Tab 补全（循环选择）
     if (key.name === 'tab') {
       const line = rl.line;
       const word = line.split(/\s+/).pop() || '';
-      const matches = tabComplete(word);
-      if (matches.length === 1) {
-        const rest = line.slice(0, -word.length);
-        // 用后空格模拟补全
-        rl._deleteLine();
-        rl._writeToOutput(rest + matches[0] + ' ');
-        return;
-      } else if (matches.length > 1) {
-        // 可选列表写到 stderr 不干扰 stdin buffer
-        process.stderr.write(`\n  ${ui.C.muted}${matches.join('  ')}${ui.C.reset}\n`);
-        rl._refreshLine();
-        return;
+
+      // 如果行内容变了，重置 tab 状态
+      if (tabState.originalLine && tabState.originalLine !== line) {
+        tabState.matches = [];
+        tabState.idx = -1;
+        tabState.prefix = '';
+        tabState.originalLine = '';
       }
+
+      // 首次 Tab：搜索匹配
+      if (tabState.matches.length === 0) {
+        const matches = tabComplete(word);
+        if (matches.length === 0) return;
+        tabState.matches = matches;
+        tabState.prefix = line.slice(0, -word.length);
+        tabState.originalLine = line;
+        tabState.idx = 0;
+      } else {
+        // 后续 Tab：循环到下一个
+        tabState.idx = (tabState.idx + 1) % tabState.matches.length;
+      }
+
+      const m = tabState.matches[tabState.idx];
+      rl._deleteLine();
+      const completed = tabState.prefix + m;
+      // 只有一个匹配则自动加空格
+      const suffix = tabState.matches.length === 1 ? ' ' : '';
+      rl._writeToOutput(completed + suffix);
+
+      // 显示候选列表（仅首次或切换时）
+      if (tabState.matches.length > 1) {
+        const items = tabState.matches.map((c, i) =>
+          i === tabState.idx ? `${ui.C.accent}${ui.C.bold}${c}${ui.C.reset}` : `${ui.C.muted}${c}${ui.C.reset}`
+        ).join('  ');
+        process.stderr.write(`\n  ${items}  ${ui.C.subtle}${tabState.idx+1}/${tabState.matches.length}${ui.C.reset}\n`);
+        rl._refreshLine();
+    }
+      return;
+    }
+    // 非 Tab 键 → 重置补全状态
+    if (tabState.matches.length > 0) {
+      tabState.matches = [];
+      tabState.idx = -1;
+      tabState.prefix = '';
+      tabState.originalLine = '';
     }
   });
 
