@@ -30,10 +30,10 @@ function shouldFallback(error) {
 
 function getNextModel() {
   const fallbacks = CFG.fallbackModels || DEFAULT_FALLBACKS;
-  const currentIdx = fallbacks.indexOf(currentModel);
-  const nextIdx = currentIdx + 1;
-  if (nextIdx < fallbacks.length) {
-    currentModel = fallbacks[nextIdx];
+  // 使用 fallbackIndex 追踪进度，避免 indexOf 找不到自定义模型的问题
+  fallbackIndex++;
+  if (fallbackIndex < fallbacks.length) {
+    currentModel = fallbacks[fallbackIndex];
     return currentModel;
   }
   return null;
@@ -46,7 +46,7 @@ function resetToPrimary() {
 
 function getModelChain() {
   const fallbacks = CFG.fallbackModels || DEFAULT_FALLBACKS;
-  return fallbacks;
+  return [CFG.model, ...fallbacks];
 }
 
 module.exports = { initFallback, getModel, shouldFallback, getNextModel, resetToPrimary, getModelChain };

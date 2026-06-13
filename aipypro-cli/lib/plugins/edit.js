@@ -2,13 +2,24 @@ const fs = require('fs');
 const path = require('path');
 const { computeDiff, formatDiff, getDiffStats } = require('../diff');
 const { interactiveEdit } = require('../interactive');
+
+const WORKSPACE = process.cwd();
+function validatePath(filePath) {
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(WORKSPACE) && !resolved.startsWith(path.resolve(__dirname, '..', '..'))) {
+    return null;
+  }
+  return resolved;
+}
+
 module.exports = {
   name: 'edit_file',
   desc: '精确替换文件内容（old_str 必须唯一）',
   schema: { type: 'object', properties: { path: { type: 'string' }, old_str: { type: 'string' }, new_str: { type: 'string' }, confirm: { type: 'boolean', description: '是否确认应用更改' }, interactive: { type: 'boolean', description: '是否启用交互式编辑' } }, required: ['path', 'old_str', 'new_str'] },
   exec: async (args) => {
     if (!args?.path) return '请提供 path 参数';
-    const fp = path.resolve(args.path);
+    const fp = validatePath(args.path);
+    if (!fp) return `路径越界: ${args.path} 不在工作区内`;
     if (!fs.existsSync(fp)) return `文件不存在: ${args.path}`;
     const content = fs.readFileSync(fp, 'utf8');
 

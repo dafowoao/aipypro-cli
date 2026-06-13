@@ -89,9 +89,22 @@ class SubAgentManager extends EventEmitter {
     const agent = new SubAgent(id, task, options);
     this.agents.set(id, agent);
     agent.on('start', () => { this.running++; this.emit('agentStart', agent); });
-    agent.on('complete', () => { this.running--; this.emit('agentComplete', agent); });
-    agent.on('error', () => { this.running--; this.emit('agentError', agent); });
-    agent.on('cancel', () => { this.running--; this.emit('agentCancel', agent); });
+    agent.on('complete', () => {
+      this.running--;
+      this.emit('agentComplete', agent);
+      // 完成后延迟清理，避免引用丢失
+      setTimeout(() => { this.agents.delete(id); }, 60000);
+    });
+    agent.on('error', () => {
+      this.running--;
+      this.emit('agentError', agent);
+      setTimeout(() => { this.agents.delete(id); }, 60000);
+    });
+    agent.on('cancel', () => {
+      this.running--;
+      this.emit('agentCancel', agent);
+      setTimeout(() => { this.agents.delete(id); }, 60000);
+    });
     if (this.running >= this.maxConcurrent) {
       await new Promise(resolve => {
         const check = () => {
@@ -101,7 +114,10 @@ class SubAgentManager extends EventEmitter {
         check();
       });
     }
-    agent.run();
+    agent.run().catch(err => {
+      this.emit('agentError', agent);
+      console.error(`子代理 ${id} 执行异常: ${err.message}`);
+    });
     return agent;
   }
 
