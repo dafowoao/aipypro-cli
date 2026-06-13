@@ -1,6 +1,7 @@
 // ============================================================
-// AiPyPro Pro v4 — 终端界面 (豪华升级版)
-// 支持: Markdown 渲染 / 状态栏 / 多行输入 / 语法高亮
+// AiPyPro Pro v4 — 终端界面 (美化加强版 v2)
+// 改进: 圆角代码框 / 对话连线 / 工具缩进 / 弹跳圆点思考动画
+//       渐变分隔线 / 状态栏卡片 / 圆角表格 / 引用背景
 // ============================================================
 const T = process.stdout.isTTY && process.stdin.isTTY;
 
@@ -23,6 +24,8 @@ const C = {
   infoBg:T?'\x1b[48;2;20;30;50m':'',       // 信息背景
   statusBg:T?'\x1b[48;2;10;18;30m':'',     // 状态栏背景
   statusBorder:T?'\x1b[48;2;30;50;80m':'', // 状态栏边框
+  // ⑧ 引用新增背景色
+  quoteBg:T?'\x1b[48;2;10;25;40m':'',
 };
 
 // ─── 符号 ───
@@ -30,21 +33,31 @@ const S = T ? {
   b:'◆', d:'·', ok:'✓', er:'✗', wa:'!', ar:'▸',
   hd:'━', hr:'─', vt:'│', br:'┃',
   quote:'▎', bullet:'●', arrow:'→',
+  // ① 圆角代码块符号
+  tl:'╭', tr:'╮', bl:'╰', brn:'╯',
+  // ⑦ 表格符号
+  tbl_tl:'┌', tbl_tr:'┐', tbl_bl:'└', tbl_br:'┘',
+  tbl_h:'┬', tbl_b:'┴', tbl_v:'│', tbl_x:'┼',
 } : {
   b:'*', d:'.', ok:'+', er:'x', wa:'!', ar:'>',
   hd:'=', hr:'-', vt:'|', br:'|',
   quote:'|', bullet:'*', arrow:'->',
+  tl:'+', tr:'+', bl:'+', brn:'+',
+  tbl_tl:'+', tbl_tr:'+', tbl_bl:'+', tbl_br:'+',
+  tbl_h:'+', tbl_b:'+', tbl_v:'|', tbl_x:'+',
 };
 
 function _(t){if(T||!t)return t||'';return t.replace(/[^\x20-\x7E]/g,'');}
 
-// ─── 品牌横幅 (动态增强版) ───
+// ─── 品牌横幅 ───
 function banner(model='',tools=0) {
   if(T){
-    console.log(`\n  ${C.accent}${C.bold}   ╔═══╗╔═╗ ╔╗╔═══╗╔═══╗${C.reset}`);
-    console.log(`  ${C.accent}${C.bold}   ╚══╗║║║╚╗║║║ ══╗║╚══╗║${C.reset}`);
-    console.log(`  ${C.accent}${C.bold}   ╔══╝║║╔╗╚╝║║╔══╝║╔══╝║${C.reset}`);
-    console.log(`  ${C.accent}${C.bold}   ╚═══╝╚╝╚═╝╚╝╚═╝ ╚╝╚═══╝${C.reset}${C.dim} v4${C.reset}`);
+    console.log(`\n  ${C.accent}${C.bold}        █████╗ ██╗██████╗ ██╗   ██╗${C.reset}`);
+    console.log(`  ${C.accent}${C.bold}       ██╔══██╗██║██╔══██╗╚██╗ ██╔╝${C.reset}`);
+    console.log(`  ${C.accent}${C.bold}       ███████║██║██████╔╝ ╚████╔╝ ${C.reset}`);
+    console.log(`  ${C.accent}${C.bold}       ██╔══██║██║██╔═══╝   ╚██╔╝  ${C.reset}`);
+    console.log(`  ${C.accent}${C.bold}       ██║  ██║██║██║        ██║   ${C.reset}`);
+    console.log(`  ${C.accent}${C.bold}       ╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ${C.reset}${C.dim} v4${C.reset}`);
   } else {
     console.log(`\n  ${C.accent}${C.bold}AiPyPro Pro${C.reset} ${C.dim}v4${C.reset}`);
   }
@@ -57,27 +70,48 @@ function banner(model='',tools=0) {
 }
 
 function line(n=40){console.log(`  ${C.subtle}${S.hr.repeat(n)}${C.reset}`);}
-function gap(){console.log(`  ${C.subtle}${S.hr.repeat(30)}${C.reset}\n`);}
 
-// ─── 角色标签 ───
+// ⑤ 渐变分隔线 — 居中 ◆ + 两侧淡出
+function gap(){
+  if(T){
+    const w = process.stdout.columns || 80;
+    const n = Math.max(Math.floor((w - 10) / 2), 15);
+    console.log(`  ${C.subtle}${S.hr.repeat(n)} ${C.accent}${S.b}${C.reset} ${C.subtle}${S.hr.repeat(n)}${C.reset}\n`);
+  } else {
+    console.log(`  ${S.hr.repeat(30)}\n`);
+  }
+}
+
+// ② 对话竖线标签 ───
+// 新增 threadLabel 模式：用户和 AI 消息之间用 ┃ 竖线连接
+let threadMode = false; // 由 index.js 控制开关
+
+function setThread(v) { threadMode = v; }
+
 function userLabel(){
-  console.log(`  ${C.amber}${S.hr.repeat(3)}${C.reset} ${C.amber}${C.bold}You${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
+  const line = threadMode ? `  ${C.subtle}${S.br}${C.reset}` : `  ${C.amber}${S.hr.repeat(3)}${C.reset}`;
+  console.log(`${line} ${C.amber}${C.bold}You${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
 }
 function aiLabel(){
-  console.log(`  ${C.accent}${S.hr.repeat(3)}${C.reset} ${C.accent}${C.bold}AiPyPro${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
+  const line = threadMode ? `  ${C.subtle}${S.br}${C.reset}` : `  ${C.accent}${S.hr.repeat(3)}${C.reset}`;
+  console.log(`${line} ${C.accent}${C.bold}AiPyPro${C.reset}  ${C.subtle}${new Date().toLocaleTimeString('zh-CN')}${C.reset}`);
 }
 function toolSection(name){
   console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.dim}${name}${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
 }
 
-// ─── 思考动画 ───
+// ④ 弹跳圆点思考动画 ───
 let timer=null;
 function thinking(){
   stopThinking();
   if(!T){process.stdout.write('  ... ');return;}
-  const f=['   ','·  ',' · ','  ·','   '];let i=0;
-  process.stdout.write(`  ${C.accent}${f[i]}${C.reset}`);
-  timer=setInterval(()=>{i=(i+1)%f.length;process.stdout.write(`\r\x1b[K${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.accent}${C.bold}思考中${C.reset} ${C.accent}${f[i]}${C.reset}`);},150);
+  const dots = ['○ ○ ○', '◔ ◔ ◔', '◑ ◑ ◑', '◕ ◕ ◕', '● ● ●', '◕ ◕ ◕', '◑ ◑ ◑', '◔ ◔ ◔'];
+  let i=0;
+  process.stdout.write(`  ${C.subtle}${S.br}${C.reset} ${C.accent}${C.bold}思考中${C.reset} ${C.accent}${dots[i]}${C.reset}`);
+  timer=setInterval(() => {
+    i = (i + 1) % dots.length;
+    process.stdout.write(`\r\x1b[K${C.subtle}${S.br}${C.reset} ${C.accent}${C.bold}思考中${C.reset} ${C.accent}${dots[i]}${C.reset}`);
+  }, 180);
 }
 function stopThinking(){
   if(timer){clearInterval(timer);timer=null;}
@@ -85,7 +119,10 @@ function stopThinking(){
 }
 
 // ============================================================
-// Markdown 渲染引擎
+// Markdown 渲染引擎 (改造版)
+// ① 代码块 ╭──╮ 圆角
+// ⑦ 表格 ┌─┬─┐ 圆角
+// ⑧ 引用 背景色
 // ============================================================
 const LANG_COLORS = {
   'python':C.cyan,'javascript':C.amber,'js':C.amber,'typescript':C.accent,'ts':C.accent,
@@ -98,25 +135,41 @@ const LANG_COLORS = {
   'makefile':C.orange,'ini':C.muted,'toml':C.green,
 };
 
-// ─── 流式输出（Markdown 感知）───
+// ─── 流式输出 ───
 const MB=50000;
-let ss={c:false,l:'',n:0,b:'',inBlockquote:false,inList:false};
+let ss={c:false,l:'',n:0,b:''};
 
-function stStart(){ss={c:false,l:'',n:0,b:'',inBlockquote:false,inList:false};}
+function stStart(){ss={c:false,l:'',n:0,b:''};}
+
+// ⑦ 表格渲染（使用 ┌─┬─┐ 四边框）
+function renderTableLine(l) {
+  const cells = l.split('|').filter(Boolean).map(c => c.trim());
+  if (!cells.length) return '';
+  const isSep = cells.every(c => /^[\s:-]+$/.test(c));
+  if (isSep) {
+    const sep = cells.map(c => {
+      const align = c.startsWith(':') && c.endsWith(':') ? `${S.hr.repeat(Math.max(c.length,3))}` :
+                   c.startsWith(':') ? `${S.hr.repeat(Math.max(c.length,2))}` :
+                   c.endsWith(':') ? `${S.hr.repeat(Math.max(c.length,2))}` :
+                   `${S.hr.repeat(Math.max(c.length,3))}`;
+      return sep;
+    });
+    return `  ${C.subtle}${S.tbl_tl}${sep.join(S.tbl_h)}${S.tbl_tr}${C.reset}`;
+  }
+  return `  ${C.subtle}${S.tbl_v}${C.reset} ${cells.join(` ${C.subtle}${S.tbl_v}${C.reset} `)} ${C.subtle}${S.tbl_v}${C.reset}`;
+}
 
 function renderMarkdownLine(l) {
-  // 表格渲染
-  if (/^\|.+\|$/.test(l.trim())) {
-    const cells = l.split('|').filter(Boolean);
-    const isSep = /^[\s:-]+$/.test(cells.join('').trim());
-    if (isSep) return `  ${C.subtle}${S.hr.repeat(36)}${C.reset}`;
-    const rendered = cells.map(c => c.trim()).join(` ${C.subtle}${S.vt}${C.reset} `);
-    return `  ${C.subtle}${S.vt}${C.reset} ${rendered} ${C.subtle}${S.vt}${C.reset}`;
-  }
-  // 分隔线
+  // ⑦ 表格（优先检测）
+  if (/^\|.+\|$/.test(l.trim())) return renderTableLine(l.trim());
+  // ⑤ 分隔线（纯分隔线）
   if (/^[-*_]{3,}\s*$/.test(l.trim())) return `  ${C.subtle}${S.hr.repeat(36)}${C.reset}`;
-  // 引用
-  if (/^>\s?/.test(l)) return `  ${C.cyan}${S.quote}${C.reset} ${C.italic}${l.replace(/^>\s?/, '')}${C.reset}`;
+  // ⑧ 引用（带背景色）
+  if (/^>\s?/.test(l)) {
+    const text = l.replace(/^>\s?/, '');
+    if(T) return `  ${C.cyan}${S.quote}${C.reset}${C.quoteBg} ${C.italic}${C.muted}${text}${C.reset}`;
+    return `  ${C.cyan}${S.quote}${C.reset} ${C.italic}${text}${C.reset}`;
+  }
   // 无序列表
   if (/^[-*+]\s/.test(l)) return `  ${C.muted}${S.bullet}${C.reset} ${renderInline(l.replace(/^[-*+]\s/, ''))}`;
   // 有序列表
@@ -144,8 +197,25 @@ function renderInline(t) {
   return r;
 }
 
+// ① 代码块渲染（╭──╮ 圆角风格）
+function codeBlockOpen(lang) {
+  const langColor = LANG_COLORS[lang.toLowerCase()] || C.muted;
+  const padded = ` ${lang} `.length > 3 ? ` ${lang} ` : ` ${lang}  `;
+  const left = `  ${C.subtle}${S.tl}${S.hr.repeat(3)}${C.reset}`;
+  const label = `${langColor}${C.bold}${padded}${C.reset}`;
+  const right = `${C.subtle}${S.hr.repeat(20)}${S.tr}${C.reset}`;
+  console.log(`${left}${label}${C.subtle}${S.hr.repeat(20)}${S.tr}${C.reset}`);
+}
+function codeBlockClose(n, lang) {
+  const langColor = LANG_COLORS[(lang||'').toLowerCase()] || C.muted;
+  const left = `  ${C.subtle}${S.bl}${S.hr.repeat(3)}${C.reset}`;
+  const label = `${langColor}${n} lines${C.reset}`;
+  const right = `${C.subtle}${S.hr.repeat(20)}${S.brn}${C.reset}`;
+  console.log(`${left} ${C.subtle}${n} lines${C.reset} ${C.subtle}${S.hr.repeat(20)}${S.brn}${C.reset}`);
+}
+
 function stWrite(t){
-  if(ss===undefined||ss.b===undefined)ss={c:false,l:'',n:0,b:'',inBlockquote:false,inList:false};
+  if(ss===undefined||ss.b===undefined)ss={c:false,l:'',n:0,b:''};
   if(ss.b.length>MB)ss.b=ss.b.slice(-MB/2);
   ss.b+=t;
   const ls=ss.b.split(/\r?\n/);ss.b=ls.pop()||'';
@@ -154,13 +224,13 @@ function stWrite(t){
     // 代码块开关
     if(x.startsWith('```')){
       if(!ss.c){
-        ss.c=true;ss.l=x.replace(/```(\w*)/,'$1').trim()||'code';ss.n=0;
-        const langColor = LANG_COLORS[ss.l.toLowerCase()] || C.muted;
-        console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${langColor}${C.bold}${ss.l}${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
+        ss.c=true;
+        ss.l = x.replace(/```(\w*)/,'$1').trim() || 'code';
+        ss.n = 0;
+        codeBlockOpen(ss.l);
       } else {
         ss.c=false;
-        const langColor = LANG_COLORS[ss.l.toLowerCase()] || C.muted;
-        console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${langColor}${ss.n} lines${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
+        codeBlockClose(ss.n, ss.l);
       }
       continue;
     }
@@ -181,7 +251,7 @@ function stFlush(){
       ss.n++;
       const lineNum = String(ss.n).padStart(3,' ');
       console.log(` ${C.codeBg}${C.subtle}${lineNum}${C.reset}${C.codeBg} ${C.code}${x}${C.reset}`);
-      console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.muted}${ss.n} lines${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
+      codeBlockClose(ss.n, ss.l);
       ss.c=false;
     } else {
       console.log(renderMarkdownLine(x));
@@ -190,23 +260,23 @@ function stFlush(){
   }
   if(ss.c){
     ss.n++;
-    console.log(`  ${C.subtle}${S.hr.repeat(3)} ${ss.n} lines ${S.hr.repeat(3)}${C.reset}`);
+    codeBlockClose(ss.n, ss.l);
     ss.c=false;
   }
 }
 
-// ─── 工具调用 ───
+// ③ 工具调用（缩进 + 清理）───
 function tLine(name,st='run'){
   const co={'run':C.accent,'done':C.green,'err':C.red};
   const lb=st==='run'?'':st==='done'?` ${C.green}${S.ok}${C.reset}`:` ${C.red}${S.er}${C.reset}`;
-  process.stdout.write(`\r\x1b[K ${co[st]}${S.b}${C.reset} ${C.dim}${name}${lb}${C.reset}`);
+  process.stdout.write(`\r\x1b[K  ${co[st]}${S.b}${C.reset} ${C.dim}${name}${lb}${C.reset}`);
   if(st!=='run')process.stdout.write('\n');
 }
 function tOut(text){
   if(!text||text.length<2)return;
   const ls=text.split('\n');
   if(ls.length>6){ls.splice(3,ls.length-4,`  ${C.dim}... ${ls.length-3} lines ...${C.reset}`);}
-  console.log(ls.map(l=>`  ${C.dim}${l.substring(0,120)}${C.reset}`).join('\n'));
+  console.log(ls.map(l=>`    ${C.dim}${l.substring(0,120)}${C.reset}`).join('\n'));
 }
 
 // ─── 消息 ───
@@ -216,10 +286,14 @@ function tip(m){console.log(`  ${C.accent}${S.b}${C.reset} ${C.dim}${_(m)}${C.re
 function warn(m){console.log(` ${C.orange}${S.wa}${C.reset} ${C.dim}${_(m)}${C.reset}`);}
 function info(m){console.log(`  ${C.dim}${_(m)}${C.reset}`);}
 
-// ─── 状态栏 (多段信息) ───
+// ⑥ 状态栏（背景卡片）───
 function status(items){
-  const p=items.map(i=>`${C.dim}${i.l}${C.reset} ${i.c||C.text}${i.v}${C.reset}`);
-  console.log(`  ${p.join(` ${C.subtle}${S.d}${C.reset} `)}`);
+  let p = items.map(i => `${C.dim}${i.l}${C.reset} ${i.c||C.text}${i.v}${C.reset}`);
+  if(T) {
+    console.log(` ${C.statusBg} ${C.dim}${S.d}${C.reset}${C.statusBg} ${p.join(` ${C.subtle}${S.d}${C.reset}${C.statusBg} `)}${C.reset}`);
+  } else {
+    console.log(`  ${p.join(` ${C.subtle}${S.d}${C.reset} `)}`);
+  }
 }
 
 // ─── 分隔标题 ───
@@ -227,7 +301,7 @@ function sectionTitle(title){
   console.log(`  ${C.subtle}${S.hr.repeat(3)}${C.reset} ${C.muted}${title}${C.reset} ${C.subtle}${S.hr.repeat(3)}${C.reset}`);
 }
 
-// ─── 底部状态信息条（简短一行提示）───
+// ─── 底部状态信息条 ───
 function bottomBar(text, color=C.muted){
   if(!T) return console.log(`  ${color}${text}${C.reset}`);
   const w = process.stdout.columns || 80;
@@ -244,7 +318,7 @@ function inputPrompt(msg='> '){
 
 module.exports={
   C,S,banner,line,gap,
-  userLabel,aiLabel,toolSection,sectionTitle,
+  userLabel,aiLabel,setThread,toolSection,sectionTitle,
   thinking,stopThinking,
   stStart,stWrite,stFlush,
   tLine,tOut,

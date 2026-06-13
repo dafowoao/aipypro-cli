@@ -94,6 +94,7 @@ async function cmdChat() {
   ui.banner(CFG.model, tools.tools.length);
   const turnCounters = { total: 0, user: 0 };
   ui.info(`/${CFG.model}  ·  /help 查看命令  ·  输入 """ 进入多行模式`);
+  ui.setThread(true);
 
   const chatHistory = [];
   let busy = false;
@@ -237,11 +238,6 @@ async function processLine(s, rl, chatHistory, turnCounters) {
   turnCounters.user++;
   const msgs = [...chatHistory, { role: 'user', content: s }];
   try {
-    ui.userLabel();
-    // 多行消息只显示第一行预览
-    const preview = s.includes('\n') ? s.split('\n')[0].substring(0,60) + '...' : s;
-    console.log(`  ${preview}\n`);
-
     ui.aiLabel();
     const reply = await callAI(msgs);
 
