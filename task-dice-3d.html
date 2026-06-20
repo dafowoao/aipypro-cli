@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家务任务骰子 · 3D Task Dice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@500;700;900&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-1:#1a1410;
+    --bg-2:#2a1f17;
+    --wood:#c89968;
+    --wood-dark:#8b5e3c;
+    --ink:#2b1810;
+    --paper:#f4e8d0;
+    --accent:#d94f30;
+    --gold:#e8b04a;
+    --muted:#a8927a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
+  body{
+    font-family:"Noto Serif SC",serif;
+    position:fixed;inset:0;
+    background:
+      radial-gradient(ellipse at 20% 10%, #3a2818 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, #2a1a12 0%, transparent 50%),
+      linear-gradient(135deg, var(--bg-1), var(--bg-2));
+    color:var(--paper);
+    position:relative;
+  }
+  /* 噪点纹理叠加 */
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity:.08;
+    pointer-events:none;
+    z-index:1;
+    mix-blend-mode:overlay;
+  }
+  /* 装饰光斑 */
+  body::after{
+    content:"";
+    position:fixed;
+    top:-20%;left:50%;
+    transform:translateX(-50%);
+    width:80vw;height:60vh;
+    background:radial-gradient(ellipse, rgba(232,176,74,.12) 0%, transparent 60%);
+    pointer-events:none;
+    z-index:1;
+  }
+
+  #app{
+    position:relative;
+    z-index:2;
+    height:100vh;
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+  }
+
+  header{
+    padding:calc(20px + env(safe-area-inset-top)) 40px 8px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    text-align:center;
+  }
+  .brand{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .brand .tag{
+    font-family:"ZCOOL QingKe HuangYou",cursive;
+    font-size:13px;
+    letter-spacing:.4em;
+    color:var(--gold);
+    text-transform:uppercase;
+  }
+  .brand h1{
+    font-family:"Noto Serif SC",serif;
+    font-size:clamp(30px,4.5vw,50px);
+    font-weight:900;
+    line-height:1;
+    color:var(--paper);
+    letter-spacing:.05em;
+  }
+  .brand h1 span{color:var(--accent);}
+  .meta{
+    text-align:right;
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:.15em;
+    line-height:1.7;
+  }
+  .meta b{color:var(--gold);font-weight:700;}
+
+  main{
+    position:relative;
+    overflow:hidden;
+  }
+  #scene{
+    width:100%;
+    height:100%;
+    cursor:grab;
+    touch-action:none;
+  }
+  #scene:active{cursor:grabbing;}
+
+  /* 结果浮层 */
+  #result{
+    position:absolute;
+    top:32%;left:50%;
+    transform:translate(-50%,-50%) scale(.8);
+    opacity:0;
+    pointer-events:none;
+    text-align:center;
+    transition:opacity .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);
+    z-index:5;
+  }
+  #result.show{
+    opacity:1;
+    transform:translate(-50%,-50%) scale(1);
+  }
+  #result .label{
+    font-family:"ZCOOL QingKe HuangYou",cursive;
+    font-size:14px;
+    letter-spacing:.5em;
+    color:var(--gold);
+    margin-bottom:8px;
+    text-transform:uppercase;
+  }
+  #result .task{
+    font-family:"ZCOOL QingKe HuangYou",cursive;
+    font-size:clamp(48px,8vw,96px);
+    color:var(--paper);
+    text-shadow:0 4px 30px rgba(217,79,48,.6), 0 0 60px rgba(232,176,74,.3);
+    letter-spacing:.1em;
+  }
+  #result .divider{
+    width:60px;height:2px;
+    background:linear-gradient(90deg,transparent,var(--gold),transparent);
+    margin:18px auto;
+  }
+  #result .hint{
+    font-size:13px;
+    color:var(--muted);
+    letter-spacing:.2em;
+  }
+
+  footer{
+    padding:16px 40px calc(20px + env(safe-area-inset-bottom));
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:24px;
+  }
+  .tips{
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:.12em;
+    line-height:1.8;
+    flex:1;
+  }
+  .tips kbd{
+    display:inline-block;
+    padding:2px 8px;
+    border:1px solid rgba(232,176,74,.3);
+    border-radius:4px;
+    background:rgba(232,176,74,.08);
+    color:var(--gold);
+    font-family:inherit;
+    font-size:11px;
+    margin:0 2px;
+  }
+
+  .controls{
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+  button.roll{
+    position:relative;
+    font-family:"ZCOOL QingKe HuangYou",cursive;
+    font-size:18px;
+    letter-spacing:.3em;
+    color:var(--ink);
+    background:linear-gradient(135deg, var(--gold), #d99830);
+    border:none;
+    padding:14px 36px 14px 40px;
+    min-height:48px;
+    border-radius:50px;
+    cursor:pointer;
+    box-shadow:
+      0 8px 24px rgba(232,176,74,.35),
+      inset 0 1px 0 rgba(255,255,255,.4),
+      inset 0 -2px 6px rgba(0,0,0,.2);
+    transition:transform .15s ease, box-shadow .2s ease;
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  button.roll::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(120deg, transparent 30%, rgba(255,255,255,.4) 50%, transparent 70%);
+    transform:translateX(-100%);
+    transition:transform .6s ease;
+  }
+  button.roll:hover::before{transform:translateX(100%);}
+  button.roll:hover{
+    transform:translateY(-2px);
+    box-shadow:
+      0 12px 32px rgba(232,176,74,.45),
+      inset 0 1px 0 rgba(255,255,255,.4),
+      inset 0 -2px 6px rgba(0,0,0,.2);
+  }
+  button.roll:active{transform:translateY(0);}
+  button.roll:disabled{
+    opacity:.5;
+    cursor:not-allowed;
+    transform:none;
+  }
+
+  button.reset{
+    font-family:inherit;
+    font-size:12px;
+    letter-spacing:.2em;
+    color:var(--muted);
+    background:transparent;
+    border:1px solid rgba(168,146,122,.3);
+    padding:12px 20px;
+    min-height:48px;
+    border-radius:50px;
+    cursor:pointer;
+    transition:all .2s ease;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  button.reset:hover{
+    color:var(--gold);
+    border-color:var(--gold);
+  }
+
+  /* 角落装饰 */
+  .corner{
+    position:fixed;
+    width:60px;height:60px;
+    z-index:3;
+    pointer-events:none;
+    opacity:.4;
+  }
+  .corner svg{width:100%;height:100%;}
+  .corner.tl{top:16px;left:16px;}
+  .corner.tr{top:16px;right:16px;transform:scaleX(-1);}
+  .corner.bl{bottom:16px;left:16px;transform:scaleY(-1);}
+  .corner.br{bottom:16px;right:16px;transform:scale(-1,-1);}
+
+  /* 竖屏手机 */
+  @media (max-width:640px){
+    header{
+      padding:calc(14px + env(safe-area-inset-top)) 18px 4px;
+      flex-direction:column;
+      align-items:center;
+      gap:8px;
+    }
+    .brand .tag{font-size:11px;letter-spacing:.3em;}
+    .brand h1{font-size:26px;}
+    .meta{font-size:10px;text-align:center;line-height:1.5;}
+    .meta br{display:none;}
+    footer{
+      padding:10px 18px calc(14px + env(safe-area-inset-bottom));
+      flex-direction:column;
+      align-items:stretch;
+      gap:10px;
+    }
+    .tips{font-size:10px;text-align:center;}
+    .tips kbd{font-size:10px;padding:1px 6px;}
+    .controls{justify-content:center;gap:10px;}
+    button.roll{padding:14px 28px;font-size:16px;flex:1;max-width:240px;}
+    button.reset{padding:12px 18px;}
+    .corner{width:36px;height:36px;}
+    .corner.tl,.corner.tr{top:8px;}
+    .corner.tl{left:8px;} .corner.tr{right:8px;}
+    .corner.bl,.corner.br{bottom:8px;}
+    .corner.bl{left:8px;} .corner.br{right:8px;}
+    #result .task{font-size:clamp(40px,12vw,72px);}
+    #result .label{font-size:12px;letter-spacing:.4em;}
+    #result .hint{font-size:11px;}
+  }
+
+  /* 横屏短屏 */
+  @media (max-height:480px) and (orientation:landscape){
+    header{padding:calc(8px + env(safe-area-inset-top)) 20px 4px;}
+    .brand h1{font-size:22px;}
+    .brand .tag{display:none;}
+    .meta{font-size:10px;}
+    footer{padding:6px 20px calc(8px + env(safe-area-inset-bottom));gap:12px;}
+    .tips{display:none;}
+    .corner{width:28px;height:28px;}
+    #result{top:50%;}
+    #result .task{font-size:clamp(32px,8vh,56px);}
+  }
+</style>
+</head>
+<body>
+
+<!-- 角落装饰 -->
+<div class="corner tl"><svg viewBox="0 0 60 60"><path d="M2 2 L2 30 M2 2 L30 2" stroke="#e8b04a" stroke-width="1.5" fill="none"/><circle cx="2" cy="2" r="3" fill="#e8b04a"/></svg></div>
+<div class="corner tr"><svg viewBox="0 0 60 60"><path d="M2 2 L2 30 M2 2 L30 2" stroke="#e8b04a" stroke-width="1.5" fill="none"/><circle cx="2" cy="2" r="3" fill="#e8b04a"/></svg></div>
+<div class="corner bl"><svg viewBox="0 0 60 60"><path d="M2 2 L2 30 M2 2 L30 2" stroke="#e8b04a" stroke-width="1.5" fill="none"/><circle cx="2" cy="2" r="3" fill="#e8b04a"/></svg></div>
+<div class="corner br"><svg viewBox="0 0 60 60"><path d="M2 2 L2 30 M2 2 L30 2" stroke="#e8b04a" stroke-width="1.5" fill="none"/><circle cx="2" cy="2" r="3" fill="#e8b04a"/></svg></div>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="tag">Housework · Dice</div>
+      <h1>王家家务<span>骰子</span></h1>
+    </div>
+    <div class="meta">
+      今日运势 · <b id="dateStr"></b><br>
+      六面任务 · 随心而掷
+    </div>
+  </header>
+
+  <main>
+    <canvas id="scene"></canvas>
+    <div id="result">
+      <div class="label">Today's Task</div>
+      <div class="task" id="taskName">—</div>
+      <div class="divider"></div>
+      <div class="hint">命运已定 · 即刻行动</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="tips">
+      <kbd>拖动</kbd> 旋转骰子 &nbsp;·&nbsp;
+      <kbd>投掷</kbd> 随机抽取任务 &nbsp;·&nbsp;
+      <kbd>双击</kbd> 重置位置
+    </div>
+    <div class="controls">
+      <button class="reset" id="resetBtn">重置</button>
+      <button class="roll" id="rollBtn">投 掷</button>
+    </div>
+  </footer>
+</div>
+
+<script type="importmap">
+{
+  "imports":{
+    "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* ============ 任务配置 ============ */
+const TASKS = [
+  { name:'扫地',   icon:'🧹', color:'#d94f30' },
+  { name:'拖地',   icon:'🪣', color:'#3a7d44' },
+  { name:'洗碗',   icon:'🍽', color:'#2d6a9f' },
+  { name:'洗衣',   icon:'👕', color:'#7a4fb8' },
+  { name:'做饭',   icon:'🍳', color:'#e8b04a' },
+  { name:'倒垃圾', icon:'🗑', color:'#8b5e3c' }
+];
+
+/* ============ 场景初始化 ============ */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x1a1410, 8, 20);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+// 俯视视角：从斜上方俯瞰骰子
+camera.position.set(0, 5.2, 3.6);
+camera.lookAt(0, 0, 0);
+
+/* ============ 灯光 ============ */
+const ambient = new THREE.AmbientLight(0xffe8c0, 0.4);
+scene.add(ambient);
+
+// 主光：从正上方偏前照射，俯视时照亮顶面
+const keyLight = new THREE.DirectionalLight(0xfff2d8, 1.5);
+keyLight.position.set(2, 8, 3);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near = 0.5;
+keyLight.shadow.camera.far = 25;
+keyLight.shadow.camera.left = -5;
+keyLight.shadow.camera.right = 5;
+keyLight.shadow.camera.top = 5;
+keyLight.shadow.camera.bottom = -5;
+keyLight.shadow.bias = -0.0005;
+keyLight.shadow.radius = 8;
+scene.add(keyLight);
+
+// 暖色补光：侧后方
+const fillLight = new THREE.DirectionalLight(0xd94f30, 0.35);
+fillLight.position.set(-4, 3, -3);
+scene.add(fillLight);
+
+// 金色边缘光：勾勒轮廓
+const rimLight = new THREE.PointLight(0xe8b04a, 1.0, 12);
+rimLight.position.set(0, 2, -4);
+scene.add(rimLight);
+
+// 顶部冷光：增加顶面层次
+const topLight = new THREE.PointLight(0xfff0e0, 0.5, 10);
+topLight.position.set(0, 6, 2);
+scene.add(topLight);
+
+/* ============ 地面（接收阴影） ============ */
+const groundGeo = new THREE.CircleGeometry(8, 64);
+const groundMat = new THREE.ShadowMaterial({ opacity:0.45 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1.2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// 装饰圆环
+const ringGeo = new THREE.RingGeometry(1.8, 1.85, 64);
+const ringMat = new THREE.MeshBasicMaterial({ color:0xe8b04a, transparent:true, opacity:0.25, side:THREE.DoubleSide });
+const ring = new THREE.Mesh(ringGeo, ringMat);
+ring.rotation.x = -Math.PI / 2;
+ring.position.y = -1.19;
+scene.add(ring);
+
+const ringGeo2 = new THREE.RingGeometry(2.3, 2.32, 64);
+const ringMat2 = new THREE.MeshBasicMaterial({ color:0xd94f30, transparent:true, opacity:0.15, side:THREE.DoubleSide });
+const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+ring2.rotation.x = -Math.PI / 2;
+ring2.position.y = -1.19;
+scene.add(ring2);
+
+/* ============ 生成面贴图 ============ */
+function createFaceTexture(task, faceIndex){
+  const size = 512;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const c = size / 2;
+
+  // 木质背景渐变（径向，中心亮）
+  const grad = ctx.createRadialGradient(c, c*0.85, 40, c, c, size*0.75);
+  grad.addColorStop(0, '#f4e0bc');
+  grad.addColorStop(0.55, '#e6c79a');
+  grad.addColorStop(1, '#c89a6a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // 木纹纹理（更细腻）
+  ctx.globalAlpha = 0.1;
+  for(let i=0; i<55; i++){
+    ctx.strokeStyle = i%3===0 ? '#7a4a28' : (i%3===1 ? '#a87850' : '#9a6840');
+    ctx.lineWidth = Math.random()*1.8 + 0.2;
+    ctx.beginPath();
+    const y = Math.random()*size;
+    ctx.moveTo(0, y);
+    ctx.bezierCurveTo(
+      size*0.3, y+(Math.random()-0.5)*24,
+      size*0.7, y+(Math.random()-0.5)*24,
+      size, y+(Math.random()-0.5)*12
+    );
+    ctx.stroke();
+  }
+  // 木节
+  ctx.globalAlpha = 0.08;
+  for(let i=0; i<4; i++){
+    const kx = Math.random()*size, ky = Math.random()*size;
+    const kr = 8 + Math.random()*14;
+    const kg = ctx.createRadialGradient(kx, ky, 0, kx, ky, kr);
+    kg.addColorStop(0, '#5a3820');
+    kg.addColorStop(1, 'rgba(90,56,32,0)');
+    ctx.fillStyle = kg;
+    ctx.beginPath();
+    ctx.arc(kx, ky, kr, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 暗角
+  const vig = ctx.createRadialGradient(c, c, size*0.35, c, c, size*0.72);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(60,30,10,0.28)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, size, size);
+
+  // 外边框
+  const m = 26;
+  ctx.strokeStyle = 'rgba(90,56,32,0.55)';
+  ctx.lineWidth = 5;
+  roundRect(ctx, m, m, size-2*m, size-2*m, 22);
+  ctx.stroke();
+
+  // 双线内框
+  ctx.strokeStyle = 'rgba(139,94,60,0.32)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, m+9, m+9, size-2*m-18, size-2*m-18, 16);
+  ctx.stroke();
+
+  // 四角点数装饰（放在边缘四角，避开中心文字）
+  const dots = faceIndex + 1;
+  const dotPositions = getDotPositions(dots, size);
+  dotPositions.forEach(([dx, dy]) => {
+    // 点的阴影底
+    ctx.beginPath();
+    ctx.arc(dx+1.5, dy+1.5, 11, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(43,24,16,0.25)';
+    ctx.fill();
+    // 主点
+    const dg = ctx.createRadialGradient(dx-3, dy-3, 1, dx, dy, 11);
+    dg.addColorStop(0, task.color);
+    dg.addColorStop(1, '#2b1810');
+    ctx.fillStyle = dg;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 10, 0, Math.PI*2);
+    ctx.fill();
+    // 高光
+    ctx.fillStyle = 'rgba(255,240,210,0.5)';
+    ctx.beginPath();
+    ctx.arc(dx-3, dy-3, 3, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // 顶部小标签
+  ctx.fillStyle = 'rgba(90,56,32,0.7)';
+  ctx.font = '600 18px "Noto Serif SC", serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('家 务 任 务', c, 78);
+
+  // 顶部装饰线
+  ctx.strokeStyle = 'rgba(90,56,32,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(c-70, 100); ctx.lineTo(c-12, 100);
+  ctx.moveTo(c+12, 100); ctx.lineTo(c+70, 100);
+  ctx.stroke();
+  // 中间小菱形
+  ctx.fillStyle = 'rgba(90,56,32,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(c, 96); ctx.lineTo(c+4, 100); ctx.lineTo(c, 104); ctx.lineTo(c-4, 100);
+  ctx.closePath();
+  ctx.fill();
+
+  // 图标（圆形底板 + 光晕，更精致）
+  ctx.save();
+  // 外圈光晕
+  const haloR = 86;
+  const halo = ctx.createRadialGradient(c, c-46, 10, c, c-46, haloR);
+  halo.addColorStop(0, 'rgba(255,240,210,0.55)');
+  halo.addColorStop(0.6, 'rgba(232,176,74,0.18)');
+  halo.addColorStop(1, 'rgba(232,176,74,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(c, c-46, haloR, 0, Math.PI*2);
+  ctx.fill();
+  // 圆形底板
+  const plate = ctx.createRadialGradient(c-12, c-58, 8, c, c-46, 66);
+  plate.addColorStop(0, '#fff6e0');
+  plate.addColorStop(0.7, '#f0d9b0');
+  plate.addColorStop(1, '#d9b07a');
+  ctx.fillStyle = plate;
+  ctx.beginPath();
+  ctx.arc(c, c-46, 66, 0, Math.PI*2);
+  ctx.fill();
+  // 底板描边
+  ctx.strokeStyle = 'rgba(90,56,32,0.45)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(c, c-46, 66, 0, Math.PI*2);
+  ctx.stroke();
+  // 底板内圈虚线装饰
+  ctx.strokeStyle = 'rgba(90,56,32,0.25)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  ctx.arc(c, c-46, 58, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 图标本身
+  ctx.shadowColor = 'rgba(43,24,16,0.4)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
+  ctx.font = '132px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 1;
+  ctx.fillText(task.icon, c, c - 46);
+  ctx.restore();
+
+  // 任务文字（立体浮雕效果）
+  const fontSize = task.name.length >= 3 ? 96 : 118;
+  ctx.font = `900 ${fontSize}px "ZCOOL QingKe HuangYou", "Noto Serif SC", serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const ty = c + 96;
+
+  // 立体厚度：多层深色向下偏移，模拟浮雕厚度
+  for(let i = 7; i >= 1; i--){
+    ctx.fillStyle = `rgba(43,24,16,${0.10 + i * 0.035})`;
+    ctx.fillText(task.name, c, ty + i);
+  }
+  // 深色描边轮廓
+  ctx.strokeStyle = 'rgba(43,24,16,0.85)';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(task.name, c, ty);
+  // 渐变填充：上亮下暗，增强立体感
+  const tg = ctx.createLinearGradient(0, ty - fontSize/2, 0, ty + fontSize/2);
+  tg.addColorStop(0, shadeColor(task.color, 55));
+  tg.addColorStop(0.5, task.color);
+  tg.addColorStop(1, shadeColor(task.color, -40));
+  ctx.fillStyle = tg;
+  ctx.fillText(task.name, c, ty);
+  // 顶部高光
+  ctx.fillStyle = 'rgba(255,250,235,0.28)';
+  ctx.fillText(task.name, c, ty - 2);
+
+  // 文字下方装饰横线
+  ctx.strokeStyle = 'rgba(90,56,32,0.4)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(c-60, c+152); ctx.lineTo(c+60, c+152);
+  ctx.stroke();
+
+  // 底部编号
+  ctx.fillStyle = 'rgba(90,56,32,0.65)';
+  ctx.font = '600 16px "Noto Serif SC", serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('No. ' + String(faceIndex+1).padStart(2,'0') + ' / 06', c, size - 60);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 16;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+// 颜色明暗调整：percent 正数变亮，负数变暗
+function shadeColor(hex, percent){
+  const num = parseInt(hex.slice(1), 16);
+  let r = (num >> 16) + percent;
+  let g = ((num >> 8) & 0xff) + percent;
+  let b = (num & 0xff) + percent;
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return `rgb(${r},${g},${b})`;
+}
+
+// 点数位置：全部放在边缘四角，避开中心文字区域
+function getDotPositions(n, size){
+  const c = size/2;
+  const e = 78; // 边缘距离
+  const TL=[e,e], TR=[size-e,e], ML=[e,c], MR=[size-e,c],
+        BL=[e,size-e], BR=[size-e,size-e], TC=[c,e];
+  const map = {
+    1: [TC],
+    2: [TL, BR],
+    3: [TL, TC, BR],
+    4: [TL, TR, BL, BR],
+    5: [TL, TR, TC, BL, BR],
+    6: [TL, TR, ML, MR, BL, BR]
+  };
+  return map[n] || [];
+}
+
+/* ============ 骰子 ============ */
+// 面顺序：+X, -X, +Y, -Y, +Z, -Z 对应任务 0-5
+const materials = TASKS.map((t, i) => new THREE.MeshStandardMaterial({
+  map: createFaceTexture(t, i),
+  roughness: 0.42,
+  metalness: 0.12,
+  color: 0xffffff,
+  envMapIntensity: 1.0
+}));
+
+// 圆角立方体：更高细分让边缘更平滑
+const diceGeo = new RoundedBoxGeometry(1.8, 1.8, 1.8, 8, 0.16);
+const dice = new THREE.Mesh(diceGeo, materials);
+dice.castShadow = true;
+dice.receiveShadow = true;
+scene.add(dice);
+
+// 初始姿态：俯视下露出三个面
+dice.rotation.set(-0.35, 0.55, 0.12);
+
+/* ============ 交互：拖动旋转 ============ */
+let isDragging = false;
+let prevX = 0, prevY = 0;
+let velX = 0, velY = 0;
+let isRolling = false;
+let hasRolled = false; // 投掷过后停止自转
+
+canvas.addEventListener('pointerdown', (e) => {
+  if(isRolling) return;
+  isDragging = true;
+  prevX = e.clientX;
+  prevY = e.clientY;
+  velX = velY = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if(!isDragging || isRolling) return;
+  const dx = e.clientX - prevX;
+  const dy = e.clientY - prevY;
+  velX = dx * 0.005;
+  velY = dy * 0.005;
+  dice.rotation.y += velX;
+  dice.rotation.x += velY;
+  prevX = e.clientX;
+  prevY = e.clientY;
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  isDragging = false;
+  canvas.releasePointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointercancel', () => { isDragging = false; });
+
+// 双击重置
+canvas.addEventListener('dblclick', () => {
+  if(isRolling) return;
+  resetDice();
+});
+
+/* ============ 投掷逻辑 ============ */
+const rollBtn = document.getElementById('rollBtn');
+const resetBtn = document.getElementById('resetBtn');
+const resultEl = document.getElementById('result');
+const taskNameEl = document.getElementById('taskName');
+
+rollBtn.addEventListener('click', rollDice);
+resetBtn.addEventListener('click', resetDice);
+
+// === 音效：骰子落地咚声 ===
+let audioCtx = null;
+function playThud(intensity){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const ctx = audioCtx;
+    if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    // 低频咚声（骰子撞击地面）
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160 + 80*intensity, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.5 * intensity, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.22);
+    // 撞击噪音（木质骰子质感）
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*0.05), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.18 * intensity, now);
+    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    noise.connect(ng).connect(ctx.destination);
+    noise.start(now);
+  }catch(e){}
+}
+
+function rollDice(){
+  if(isRolling) return;
+  isRolling = true;
+  rollBtn.disabled = true;
+  resultEl.classList.remove('show');
+
+  let currentPhase = -1; // 跟踪弹跳阶段，用于触发落地音效
+
+  // 随机选择目标面
+  const targetFace = Math.floor(Math.random() * 6);
+  // 每个面朝上（+Y）需要的旋转
+  const faceRotations = [
+    { x:0,           y:0,            z:-Math.PI/2 },  // +X 面朝上
+    { x:0,           y:0,            z:Math.PI/2  },  // -X 面朝上
+    { x:0,           y:0,            z:0          },  // +Y 面朝上
+    { x:Math.PI,     y:0,            z:0          },  // -Y 面朝上
+    { x:-Math.PI/2,  y:0,            z:0          },  // +Z 面朝上
+    { x:Math.PI/2,   y:0,            z:0          }   // -Z 面朝上
+  ];
+
+  const target = faceRotations[targetFace];
+  // 加上随机整圈数，让动画更生动
+  const spinX = target.x + Math.PI * 2 * (2 + Math.floor(Math.random()*2));
+  const spinY = target.y + Math.PI * 2 * (2 + Math.floor(Math.random()*2));
+  const spinZ = target.z + Math.PI * 2 * (1 + Math.floor(Math.random()*2));
+
+  // 起始旋转
+  const startX = dice.rotation.x;
+  const startY = dice.rotation.y;
+  const startZ = dice.rotation.z;
+
+  // 归一化起始角度到 [0, 2π)
+  const norm = (a) => {
+    a = a % (Math.PI*2);
+    if(a < 0) a += Math.PI*2;
+    return a;
+  };
+
+  const duration = 2500;
+  const startTime = performance.now();
+  const hMax = 3.2; // 抛起最大高度
+
+  function animate(now){
+    const t = Math.min((now - startTime) / duration, 1);
+
+    // 高度：抛物线抛起 + 落地多次递减弹跳（真实丢骰子物理感）
+    let y = 0;
+    if(t < 0.42){
+      // 上抛 + 下落
+      const p = t / 0.42;
+      y = hMax * Math.sin(p * Math.PI);
+    } else if(t < 0.66){
+      // 第一次弹跳
+      const p = (t - 0.42) / 0.24;
+      y = hMax * 0.32 * Math.sin(p * Math.PI);
+    } else if(t < 0.82){
+      // 第二次弹跳
+      const p = (t - 0.66) / 0.16;
+      y = hMax * 0.11 * Math.sin(p * Math.PI);
+    } else if(t < 0.92){
+      // 第三次小弹跳
+      const p = (t - 0.82) / 0.10;
+      y = hMax * 0.04 * Math.sin(p * Math.PI);
+    } else {
+      y = 0;
+    }
+    dice.position.y = y;
+
+    // 落地音效：检测弹跳阶段切换，每次触地播放咚声
+    let phase;
+    if(t < 0.42) phase = 0;
+    else if(t < 0.66) phase = 1;
+    else if(t < 0.82) phase = 2;
+    else if(t < 0.92) phase = 3;
+    else phase = 4;
+    if(phase !== currentPhase){
+      if(currentPhase >= 0){
+        const vol = phase === 1 ? 1 : phase === 2 ? 0.55 : phase === 3 ? 0.3 : 0.15;
+        playThud(vol);
+      }
+      currentPhase = phase;
+    }
+
+    // 旋转：翻滚多圈，逐渐收敛到目标面
+    const ease = 1 - Math.pow(1 - t, 3);
+    dice.rotation.x = startX + (spinX - norm(startX)) * ease;
+    dice.rotation.y = startY + (spinY - norm(startY)) * ease;
+    dice.rotation.z = startZ + (spinZ - norm(startZ)) * ease;
+
+    if(t < 1){
+      requestAnimationFrame(animate);
+    } else {
+      // 精确落到目标
+      dice.rotation.set(target.x, target.y, target.z);
+      dice.position.y = 0;
+      isRolling = false;
+      hasRolled = true; // 标记已投掷，停止自转
+      velX = velY = 0; // 清除惯性
+      rollBtn.disabled = false;
+
+      // 显示结果
+      taskNameEl.textContent = TASKS[targetFace].name;
+      taskNameEl.style.color = TASKS[targetFace].color;
+      setTimeout(() => resultEl.classList.add('show'), 200);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+function resetDice(){
+  if(isRolling) return;
+  resultEl.classList.remove('show');
+  isRolling = true;
+  rollBtn.disabled = true;
+
+  const startX = dice.rotation.x;
+  const startY = dice.rotation.y;
+  const startZ = dice.rotation.z;
+  const targetX = -0.35, targetY = 0.55, targetZ = 0.12;
+  const duration = 600;
+  const startTime = performance.now();
+
+  function animate(now){
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    dice.rotation.x = startX + (targetX - startX) * ease;
+    dice.rotation.y = startY + (targetY - startY) * ease;
+    dice.rotation.z = startZ + (targetZ - startZ) * ease;
+    dice.position.y = 0;
+    if(t < 1){
+      requestAnimationFrame(animate);
+    } else {
+      isRolling = false;
+      hasRolled = false; // 重置后恢复自转
+      rollBtn.disabled = false;
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+/* ============ 渲染循环 ============ */
+function resize(){
+  const main = document.querySelector('main');
+  const w = main.clientWidth;
+  const h = main.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  // 自适应相机距离：竖屏/短屏拉远，保证骰子完整可见
+  const aspect = w / h;
+  let scale = 1;
+  if(aspect < 1){
+    scale = 1 + (1 - aspect) * 0.9;
+  } else if(h < 450){
+    scale = 1 + (450 - h) / 280;
+  }
+  camera.position.set(0, 5.2 * scale, 3.6 * scale);
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+resize();
+
+function tick(){
+  // 惯性旋转（投掷过后停止自转，保持结果面朝上）
+  if(!isDragging && !isRolling){
+    if(Math.abs(velX) > 0.0001 || Math.abs(velY) > 0.0001){
+      dice.rotation.y += velX;
+      dice.rotation.x += velY;
+      velX *= 0.94;
+      velY *= 0.94;
+    } else if(!hasRolled){
+      // 未投掷时缓慢自转
+      dice.rotation.y += 0.002;
+    }
+  }
+
+  // 装饰圆环呼吸
+  const t = performance.now() * 0.001;
+  ring.material.opacity = 0.2 + Math.sin(t * 1.5) * 0.08;
+  ring2.material.opacity = 0.12 + Math.sin(t * 1.5 + 1) * 0.05;
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* ============ 日期显示 ============ */
+const now = new Date();
+const months = ['一','二','三','四','五','六','七','八','九','十','十一','十二'];
+document.getElementById('dateStr').textContent =
+  `${now.getFullYear()}年${months[now.getMonth()]}月${now.getDate()}日`;
+</script>
+</body>
+</html>
